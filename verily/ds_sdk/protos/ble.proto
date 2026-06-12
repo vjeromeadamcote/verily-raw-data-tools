@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package lifescience.ble;
+
+import "verily/ds_sdk/protos/enums.proto";
+
+// Configuration of a BLE peripheral sensor device.
+message BlePeripheralDeviceConfig {
+  // Features that the BLE peripheral provides.
+  repeated BlePeripheralFeatureConfig features = 1;
+
+  // Service UUID to scan for when discovering devices of this type.
+  string scan_service_uuid = 2;
+
+  // Manufacturer ID to filter by when discovering devices of this type.
+  int32 manufacturer_id = 3;
+}
+
+// Configuration of a BLE feature of a peripheral sensor device.
+message BlePeripheralFeatureConfig {
+  // The characteristics to read. May or may not be used to populate anything.
+  repeated BlePeripheralCharacteristicConfig reads = 1;
+
+  // The characteristics to register for notifications about, after all reads
+  // are processed. May or may not be used to populate anything.
+  repeated BlePeripheralCharacteristicConfig notifications = 2;
+}
+
+// Configuration of a BLE characteristic of a peripheral device.
+message BlePeripheralCharacteristicConfig {
+  // Identifier of the BLE service that this characteristic is a part of.
+  string service_uuid = 1;
+  // Identifier of the BLE characteristic.
+  string characteristic_uuid = 2;
+
+  // The fields to be read from the bytes returned for this characteristic,
+  // in the order that they should be read.
+  // Can be empty if this doesn’t populate anything.
+  repeated BlePeripheralFieldConfig fields = 3;
+}
+
+message BlePeripheralFieldConfig {
+  // The field that is being populated. If this is "_TIMESTAMP",
+  // the field is the timestamp for the reading. If this is "_FLAGS",
+  // the field is the flags used to evaluate the rest of the reading.
+
+  // Note that the same field name can be used multiple times, but should have
+  // different values for flag_bitmask each time that are mutually exclusive.
+  string field_name = 1;
+
+  // A bitmask that when ANDed with the flags for the characteristic must match
+  // flag_value in order for this field to be used.
+  int32 flags_bitmask = 2;
+
+  // The value that the flags ANDed with flag_bitmask must match.
+  int32 flags_value = 3;
+
+  // The format of the value for this field in the data.
+  BluetoothFormatType format_type = 4;
+
+  // The unit of measurement.
+  google.lifescience.sensorstore.UnitType unit_type = 5;
+
+  // Multiplier for values for this field. Combines multiplier and exponent
+  // from Bluetooth spec.
+  float multiplier = 6;
+
+  // If not empty, one or more enum fields are calculated based on the value
+  // of this field, based on the bits of the value of this field.
+  // These wind up in Datum.enum_values.
+  repeated BleFlagEnumFieldConfig enum_fields = 7;
+
+  // The name of the Sensor Suite data spec that this field should be
+  // added as a data point for. If not set, this field will not populate
+  // a data point.
+  string data_spec_name = 8;
+}
+
+// See: https://www.bluetooth.com/specifications/assigned-numbers/format-types
+enum BluetoothFormatType {
+  // For unparsable data. Do not use.
+  UNSPECIFIED_FORMAT_TYPE = 0;
+  // 32-bit float
+  FLOAT = 1;
+  // 16-bit float
+  SFLOAT = 2;
+  // Signed 32-bit integer
+  SINT32 = 3;
+  // Signed 64-bit integer
+  SINT64 = 4;
+  // Unsigned 8-bit byte
+  UINT8 = 5;
+  // Unsigned 16-bit short
+  UINT16 = 6;
+  // Unsigned 32-bit integer
+  UINT32 = 7;
+}
+
+// Bit-masked flag values for the measurement. Used in parsing packed BLE data.
+// For example, whether or not a field value is packed or omitted from BLE data.
+// For a concrete example see the "Flags" field in
+// https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.characteristic.blood_pressure_measurement.xml.
+message BleFlagEnumFieldConfig {
+  // The field name for the enum. If not set, this field will not be returned
+  // (we just skip past the bits.)
+  string field_name = 1;
+
+  // The number of bits used to represent this enum from the value of the parent
+  // field.
+  int32 num_bits = 2;
+
+  // Mappings from flag values to names. If this is empty, the field name will
+  // use the numeric value of the bits; this is most useful for simple boolean
+  // flag fields.
+  repeated BleFlagEnumValueMapping value_mappings = 3;
+
+  // The name of the Sensor Suite data spec containing data points to populate
+  // with values from this enum. If not set, no data points will be populated.
+  string data_spec_name = 4;
+}
+
+// Mapping of flag value to names.
+message BleFlagEnumValueMapping {
+  // A numeric value for a flag enum field.
+  int32 flags_value = 1;
+
+  // The string value that the bit value maps to; this is what will be returned
+  // in the Datum for the field when the value for the bits matches flags_value.
+  string name = 2;
+}

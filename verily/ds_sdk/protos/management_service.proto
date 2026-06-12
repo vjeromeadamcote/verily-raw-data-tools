@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package lifescience.sensors.registry.management;
+
+import "google/api/annotations.proto";
+import "verily/ds_sdk/protos/management_resources.proto";
+
+// The management API provided by the Sensor Registry allows clients to create
+// devices, authenticate them, update their config, and discover them via
+// different query parameters. The API is intended to be used by internal Verily
+// clients like CSP, Hardware services, and other Sensor Suite services.
+//
+// API calls to any method of the Management API are authorized by the caller's
+// permission in the specified device registry. Callers are identified by their
+// GAIA identity using a GaiaMint with the scope. The permissions on the device
+// registry are provided at the time a device registry is created and can be
+// updated afterwards.
+service ManagementService {
+  /* Registries */
+
+  // Lists the device registries that the caller has at least `VIEWER` access
+  // to.
+  rpc ListRegistries(ListRegistriesRequest) returns (ListRegistriesResponse) {
+    option (google.api.http) = {
+      get: "/v1/registries"
+    };
+  }
+}
+
+/* Registries */
+
+// Request for the ListRegistries method.
+message ListRegistriesRequest {}
+
+// Response of the ListRegistries method.
+message ListRegistriesResponse {
+  // Registries that the caller has at least `VIEWER` access to.
+  repeated lifescience.sensors.registry.management.Registry registries = 1;
+}

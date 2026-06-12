@@ -1,0 +1,27 @@
+[
+  {
+    "mode": "NULLABLE",
+    "name": "user_id",
+    "type": "STRING"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "device_id",
+    "type": "STRING"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "annotation_label",
+    "type": "STRING"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "start_timestamp_utc",
+    "type": "TIMESTAMP"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "end_timestamp_utc",
+    "type": "TIMESTAMP"
+  }
+]

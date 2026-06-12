@@ -1,0 +1,20 @@
+# Lint as: python3
+# pylint: disable=invalid-name
+"""Registers the schema for com.verily.myalo.sleep_api_classify with Beam."""
+
+import dataclasses
+from typing import Optional
+
+from verily.ds_sdk.core.schemas import DataPoint
+from verily.ds_sdk.core.schemas import dataspec
+
+
+@dataspec('com.verily.myalo.sleep_api_classify')
+@dataclasses.dataclass
+class MyaloSleep_Api_Classify(DataPoint):
+    """Beam RowSchema for com.verily.myalo.sleep_api_classify."""
+    confidence: Optional[int] = None
+    light: Optional[int] = None
+    motion: Optional[int] = None
+    noise: Optional[int] = None
+    reported_time: Optional[int] = None

@@ -1,0 +1,204 @@
+syntax = "proto3";
+
+package google.lifescience.sensorstore;
+
+// LINT.IfChange
+// All data is segmented by the Verily application which created it.
+enum ApplicationId {
+  // For unparsable data. Do not use.
+  APPLICATION_ID_UNSPECIFIED = 0;
+  // Can be used for testing purposes. Data stored as TESTING is not guaranteed
+  // to be kept forever.
+  TESTING = 1;
+  // Study Kit is a health tracking device created by the Verily Life Sciences
+  // team. The device gathers and understands data about a patient's health and
+  // can aid in early disease detection for those with cardiovascular and
+  // movement disorders.
+  // (-- go/studykit --)
+  STUDY_KIT = 2;
+  // Myalo is a clinical study run by Verily Life Sciences.
+  MYALO = 3;
+  // Baseline is a clinical study run by Verily Life Sciences.
+  BASELINE = 4;
+}
+// LINT.ThenChange(//depot/google3/googlex/pancetta/drip/arrotolata/proto/arrotolata_enums.proto)
+
+// Keyspace the UserId is in.
+enum UserIdKeyspace {
+  // For unparsable data. Do not use.
+  USER_ID_KEYSPACE_UNSPECIFIED = 0;
+  // UserId is a GAIA ID, see:
+  // https://developers.google.com/issue-tracker/concepts/access-control#users
+  GAIA_ID = 1;
+  // See UserId.user_string.
+  HASHED_STRING = 2;
+  // UserId is a CSP ID. Uses UserId.user_string.
+  // TODO(b/180118973): If used for ReadDataPoints, this is always the external
+  // CSP ID. This is the internal CSP ID for the SensorStore storage.
+  CSP_ID = 3;
+  // UserId is for an anonymous study device. Uses UserId.user_string.
+  ANON_STUDY_DEVICE = 4 [deprecated = true];
+  // Custom identifier from sensor registry. Uses UserId.user_string.
+  SENSOR_REGISTRY_CUSTOM = 5;
+  // Users in the DMI system. Uses Userid.user_string. Caller must be
+  // authenticated with the DMI system.
+  DMI = 6;
+  // UserId is a CSP study participant ID currently used in the China version of
+  // the Baseline platform version. Uses UserId.user_string.
+  CSP_UUID = 7;
+  // Firebase accounts user ID. Uses Userid.user_string.
+  FIREBASE = 8;
+  // UserId is a CSP Internal ID. Uses UserId.user_string.
+  CSP_INTERNAL_ID = 9;
+}
+
+// This must be kept in sync with the Value.data oneof. See comments in Value.
+enum PrimitiveType {
+  // For unparsable data. Do not use.
+  PRIMITIVE_TYPE_UNSPECIFIED = 0;
+  // A single int64.
+  INT64 = 1;
+  // A list of int64s.
+  INT64_LIST = 2;
+  // A single float64.
+  FLOAT64 = 3;
+  // A list of float64s.
+  FLOAT64_LIST = 4;
+  // A single string.
+  STRING = 5;
+  // A list of string.
+  STRING_LIST = 6;
+  // A blob of bytes.
+  BLOB = 7;
+  // An Any message.
+  ANY = 8;
+  // A single boolean.
+  BOOLEAN = 9;
+  // A list of booleans.
+  BOOLEAN_LIST = 10;
+  // A list of blobs.
+  BLOB_LIST = 11;
+}
+
+// This enum is for all core standard physical units, plus a few derived ones
+// for convenience. See:
+// http://physics.nist.gov/cuu/Units/units.html
+enum UnitType {
+  // For unparsable data. Do not use.
+  UNIT_TYPE_UNSPECIFIED = 0;
+  // Special unit to indicate some counting metric (unitless).
+  COUNT = 1;
+  // Special unit to indicate a ratio (unitless).
+  RATIO = 2;
+  // Unit of length.
+  METER = 3;
+  // Unit of mass.
+  GRAM = 4;
+  // Unit of time.
+  SECOND = 5;
+  // Unit of electric current.
+  AMPERE = 6;
+  // Unit of thermodynamic temperature.
+  KELVIN = 7;
+  // Unit of amount of substance.
+  MOLE = 8;
+  // Unit of luminous intensity.
+  CANDELA = 9;
+  // Derived special unit. HECTO * RATIO
+  PERCENT = 10;
+  // Derived unit of volume. MILLI * METER^3
+  LITER = 11;
+  // Derived unit of electrical potential difference.
+  // (KILO * GRAM) * METER^2 * AMPERE^-1 * SECOND^-3
+  VOLT = 12;
+  // Derived unit of pressure or stress.
+  // (KILO * GRAM) * METER^-1 * SECOND^-2
+  PASCAL = 13;
+  // Derived unit of force.
+  // (KILO * GRAM) * METER * SECOND^-2
+  NEWTON = 14;
+  // Derived unit of energy, work or heat.
+  // (KILO * GRAM) * METER^2 * SECOND^-2
+  JOULE = 15;
+  // Derived unit of angle.
+  RADIAN = 16;
+  // Derived unit of angle. π / 180 * RADIAN
+  DEGREE = 17;
+  // Derived unit of solid angle.
+  STERADIAN = 18;
+  // Derived unit of temperature. KELVIN - 273.15
+  CELSIUS = 19;
+  // Derived unit. METER * SECOND^-1
+  VELOCITY = 20;
+  // Derived unit. METER * SECOND^-2
+  ACCELERATION = 21;
+  // Derived unit of luminous flux. CANDELA * STERADIAN
+  LUMEN = 22;
+  // Derived unit of illuminance. LUMEN * METER^-2
+  LUX = 23;
+  // Derived unit of electrical resistance. VOLT * AMPERE^-1
+  OHM = 24;
+  // Derived unit of power. JOULE * SECOND^-1.
+  WATT = 25;
+  // Unit of information.
+  BIT = 26;
+  // Derived unit of information. 8 * BIT
+  BYTE = 27;
+  // Derived unit. NEWTON / (AMPERE * METER)
+  TESLA = 28;
+  // Derived unit of pressure or stress. 133.322387415 * PASCAL
+  MMHG = 29;
+  // Derived unit of pressure or stress. 0.0101972 * PASCAL
+  CMH2O = 30;
+  // Derived unit of time. 60 * SECOND
+  MINUTE = 31;
+  // Derived unit of time. 3600 * SECOND
+  HOUR = 32;
+}
+
+// Various scaling factors used throughout science. See:
+// http://physics.nist.gov/cuu/Units/prefixes.html
+enum UnitScale {
+  // For unparsable data. Do not use.
+  UNIT_SCALE_UNSPECIFIED = 0;
+  // No scaling.
+  UNIT = 1;
+  // 10^-1
+  DECI = 2;
+  // 10^-2
+  CENTI = 3;
+  // 10^-3
+  MILLI = 4;
+  // 10^-6
+  MICRO = 5;
+  // 10^-9
+  NANO = 6;
+  // 10^-12
+  PICO = 7;
+  // 10^-15
+  FEMTO = 8;
+  // 10^1
+  DEKA = 9;
+  // 10^2
+  HECTO = 10;
+  // 10^3
+  KILO = 11;
+  // 10^6
+  MEGA = 12;
+  // 10^9
+  GIGA = 13;
+  // 10^12
+  TERA = 14;
+  // 10^15
+  PETA = 15;
+}
+
+// Whether the collected data is measured when the DST time is enabled.
+enum DaylightSavingTime {
+  // The DST time is not specified, usually when the timezone is location-based.
+  DAYLIGHT_SAVING_TIME_UNSPECIFIED = 0;
+  // The data is not measured with the DST time.
+  STANDARD = 1;
+  // The data is measured with the DST time.
+  DST = 2;
+}
