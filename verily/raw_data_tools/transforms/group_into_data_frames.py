@@ -8,9 +8,9 @@ import apache_beam as beam
 from apache_beam.utils.timestamp import Timestamp
 import pandas as pd
 
-from verily.ds_sdk.core import schemas
-from verily.ds_sdk.core.transforms.atomic import key_by
-from verily.ds_sdk.core.utils import timestamps
+from verily.raw_data_tools.schemas import schemas
+from verily.raw_data_tools.transforms import key_by
+from verily.raw_data_tools.utils import timestamps
 
 _EXCLUDED_FIELDS = frozenset(['_state_key'])
 

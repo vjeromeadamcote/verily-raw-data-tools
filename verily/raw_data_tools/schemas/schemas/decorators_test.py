@@ -6,9 +6,9 @@ import unittest
 
 from apache_beam.utils.timestamp import Timestamp
 
-from verily.ds_sdk.core import schemas
-from verily.ds_sdk.core.schemas import decorators
-from verily.ds_sdk.core.schemas import shared_schemas
+from verily.raw_data_tools.schemas import schemas
+from verily.raw_data_tools.schemas.schemas import decorators
+from verily.raw_data_tools.schemas.schemas import shared_schemas
 
 
 class DecoratorsTest(unittest.TestCase):
@@ -93,8 +93,8 @@ class DecoratorsTest(unittest.TestCase):
     def test_data_spec_missing_metadata(self):
         with self.assertRaisesRegex(
                 ValueError, 'A data_point_metadata field of type '
-                'verily.ds_sdk.core.schemas.shared_schemas.DataPointMetadata is'
-                ' required to write data to SensorStore.'):
+                'A data_point_metadata field of type '
+                'DataPointMetadata is required to write data to SensorStore'):
 
             @decorators.dataspec('com.verily.imu')  # pylint: disable=unused-variable,missing-class-docstring
             @dataclasses.dataclass

@@ -4,8 +4,8 @@
 
 import dataclasses
 
-from verily.ds_sdk.core.schemas import DataPoint
-from verily.ds_sdk.core.schemas import dataspec
+from verily.raw_data_tools.schemas.schemas.shared_schemas import DataPoint
+from verily.raw_data_tools.schemas.schemas.decorators import dataspec
 
 
 @dataspec('com.verily.cam.battery_status')

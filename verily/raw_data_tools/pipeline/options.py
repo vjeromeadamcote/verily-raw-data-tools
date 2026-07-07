@@ -12,8 +12,8 @@ from typing import Any, Dict, Optional, Set, Tuple
 from google.cloud import storage  # type: ignore
 import pandas as pd
 
-from verily.ds_sdk.core.gcp import credentials
-from verily.ds_sdk.core.utils import dataflow_utils
+from verily.raw_data_tools.pipeline import credentials
+from verily.raw_data_tools.pipeline import dataflow_utils
 
 
 class JoinIf(enum.Enum):
@@ -142,7 +142,7 @@ class IncrementalQueryOptions:
             self.write_end_time = pd.Timestamp.now(tz='UTC')
 
     def _update_state_from_gcs(self, registry_file: str,
-                               creds: credentials.DsSdkCredentials,
+                               creds: credentials.RawDataToolsCredentials,
                                billing_project: str):
         if self.state_file_path is None:
             raise ValueError(
@@ -194,7 +194,7 @@ class IncrementalQueryOptions:
             return
 
     def update_from_state_file(self, registry: str,
-                               creds: credentials.DsSdkCredentials,
+                               creds: credentials.RawDataToolsCredentials,
                                billing_project: str):
         if self.state_file_path is None:
             raise ValueError(
@@ -206,7 +206,7 @@ class IncrementalQueryOptions:
             self._update_state_from_local(registry_file)
 
     def write_state_file(self, registry: str,
-                         creds: credentials.DsSdkCredentials,
+                         creds: credentials.RawDataToolsCredentials,
                          billing_project: str):
         if self.state_file_path is None:
             logging.warning(
@@ -305,20 +305,19 @@ class DataflowOptions:
         opts['region'] = self.region
 
         try:
-            from importlib_metadata import \
-                version  # pylint: disable=import-outside-toplevel
-            ds_sdk_version = version('verily.ds_sdk')
-            ds_sdk_version = dataflow_utils.escape_dataflow_job_labels(
-                ds_sdk_version)
-            version_label = f'ds_sdk_version={ds_sdk_version}'
+            from importlib.metadata import version as get_version
+            rdt_version = get_version('verily-raw-data-tools')
+            rdt_version = dataflow_utils.escape_dataflow_job_labels(
+                rdt_version)
+            version_label = f'raw_data_tools_version={rdt_version}'
             if 'labels' in opts:
                 opts['labels'].append(version_label)
             else:
                 opts['labels'] = [version_label]
-        except ImportError:
+        except Exception:
             logging.info(
-                'Unable to import importlib_metadata.version, ds sdk verison '
-                'label will not be attached.')
+                'Unable to read package version, version label will not '
+                'be attached.')
 
         # TODO(b/248274745): see if this can be removed if we can decrease the
         # disk space required by the DS SDK.

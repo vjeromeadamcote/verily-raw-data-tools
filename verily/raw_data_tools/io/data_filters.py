@@ -26,10 +26,10 @@ from pandas.api.types import is_datetime64_any_dtype
 from pandas.api.types import is_int64_dtype
 from pandas.api.types import is_object_dtype
 
-from verily.ds_sdk import TimeRange
-from verily.ds_sdk.core import conditions
-from verily.ds_sdk.core import schemas
-from verily.ds_sdk.core.io.data_source_cache import DataSourceCache
+from verily.raw_data_tools.conditions import TimeRange
+from verily.raw_data_tools import conditions
+from verily.raw_data_tools.schemas import schemas
+from verily.raw_data_tools.utils.data_source_cache import DataSourceCache
 
 DEVICE_ID_FIELD: str = 'DeviceID'
 DATA_POINT_TIME_FIELD: str = 'DataPointTime'

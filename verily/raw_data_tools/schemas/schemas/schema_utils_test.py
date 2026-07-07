@@ -9,11 +9,11 @@ from apache_beam.testing.util import equal_to
 from apache_beam.utils.timestamp import Timestamp
 import pandas as pd
 
-from verily.ds_sdk.core import schemas
-from verily.ds_sdk.core.schemas import schema_utils
-from verily.ds_sdk.core.schemas import shared_schemas
-from verily.ds_sdk.core.transforms import group_into_data_frames
-from verily.ds_sdk.core.transforms.atomic import key_by
+from verily.raw_data_tools.schemas import schemas
+from verily.raw_data_tools.schemas.schemas import schema_utils
+from verily.raw_data_tools.schemas.schemas import shared_schemas
+from verily.raw_data_tools.transforms import group_into_data_frames
+from verily.raw_data_tools.transforms import key_by
 
 
 def build_timestamp(timestamp_str: str) -> Timestamp:

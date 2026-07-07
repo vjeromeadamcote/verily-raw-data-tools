@@ -2,66 +2,93 @@
 
 This example demonstrates:
 1. Reading compressed sensor data
-2. Unpacking into time series
-3. Converting to Pandas DataFrames
-4. Keying by device ID
+2. Unpacking IMU into time series with UnpackImu
+3. Keying by participant + device
+4. Building Pandas DataFrames
+
+Set GOOGLE_PROJECT and BQ_DATASET env vars to run against real data.
+Without them, the example runs a synthetic-data demo using the
+KeyDataPointsBy / GroupIntoDataFrames transforms directly.
 """
 
+import os
+
 import apache_beam as beam
-from verily.raw_data_tools import RawDataIO, DataUnpacker
+from apache_beam.utils.timestamp import Timestamp
+import pandas as pd
+
+from verily.raw_data_tools import RawDataIO
+from verily.raw_data_tools.schemas.schemas.shared_schemas import (
+    DataPoint, DataPointMetadata, _STATE_KEY)
+from verily.raw_data_tools.transforms.key_by import KeyDataPointsBy
+from verily.raw_data_tools.transforms.group_into_data_frames import (
+    GroupIntoDataFrames)
+from verily.raw_data_tools.unpacking import UnpackImu
 from verily.raw_data_tools.transforms import BuildDataFrames, KeyBy
 
 
+PROJECT = os.getenv('GOOGLE_PROJECT')
+DATASET = os.getenv('BQ_DATASET', 'my_sensor_dataset')
+
+
+def print_dataframe_info(kv):
+    key, df = kv
+    print(f'\nKey: {key}')
+    print(f'DataFrame shape: {df.shape}')
+    print(f'Columns: {df.columns.tolist()}')
+    print(df.head())
+    return kv
+
+
 def main():
-    # Initialize I/O
-    io = RawDataIO(
-        project='my-gcp-project',
-        dataset='my_sensor_dataset',
-        runner='DirectRunner'
-    )
+    if PROJECT:
+        io = RawDataIO(
+            project=PROJECT,
+            dataset=DATASET,
+            runner='DirectRunner',
+        )
+        pipeline = io.create_pipeline(name='UnpackAndTransform')
+        compressed_data = pipeline | 'Read IMU' >> io.read_datapoints(
+            data_types=['IMU'],
+            start_time='2024-01-01',
+            end_time='2024-01-02',
+            limit=100,
+        )
+        unpacked = compressed_data | 'Unpack' >> UnpackImu()
+        keyed = unpacked | 'Key by Device' >> KeyBy(key_field='DeviceID')
+        dataframes = keyed | 'Build DataFrames' >> BuildDataFrames()
+        dataframes | 'Print Info' >> beam.Map(print_dataframe_info)
 
-    # Create pipeline
-    pipeline = io.create_pipeline(name='UnpackAndTransform')
+        result = pipeline.run()
+        result.wait_until_finish()
+    else:
+        print('No GOOGLE_PROJECT set — running synthetic demo.')
+        metadata = DataPointMetadata(
+            data_source_id=1,
+            device_id='dev-syn-001',
+            participant_id='part-001',
+            participant_namespace=1,
+            echo_metadata=None,
+            sensor_store_metadata=None,
+            annotation_labels=set(),
+            _state_key=_STATE_KEY.CREATED_USING_BUILDER)
 
-    # Read compressed IMU data
-    compressed_data = pipeline | 'Read IMU' >> io.read_datapoints(
-        data_types=['IMU'],
-        start_time='2024-01-01',
-        end_time='2024-01-02',
-        limit=100
-    )
+        ts = Timestamp.from_utc_datetime(
+            pd.Timestamp('2024-01-01 12:00:00', tz='UTC'))
+        data_points = [
+            DataPoint(data_point_metadata=metadata,
+                      measurement_timestamp_utc=ts),
+        ]
 
-    # Unpack the compressed sensor data
-    unpacker = DataUnpacker(
-        error_thresh=0.05,           # 5% sampling rate error tolerance
-        ignore_median_fs_error=False
-    )
-    unpacked_data = compressed_data | 'Unpack' >> beam.ParDo(unpacker)
-
-    # Key data by device ID for parallel processing
-    by_device = unpacked_data | 'Key by Device' >> KeyBy(key_field='DeviceID')
-
-    # Convert to DataFrames
-    dataframes = by_device | 'Build DataFrames' >> BuildDataFrames(
-        include_metadata=True,
-        sort_by_time=True
-    )
-
-    # Print results
-    def print_dataframe_info(kv):
-        device_id, df = kv
-        print(f"\nDevice: {device_id}")
-        print(f"DataFrame shape: {df.shape}")
-        print(f"Columns: {df.columns.tolist()}")
-        print(df.head())
-        return kv
-
-    dataframes | 'Print Info' >> beam.Map(print_dataframe_info)
-
-    # Run pipeline
-    result = pipeline.run()
-    result.wait_until_finish()
-    print("\nPipeline completed successfully!")
+        with beam.Pipeline() as p:
+            output = (
+                p
+                | beam.Create(data_points)
+                | KeyDataPointsBy(by_device=True, by_participant=True)
+                | GroupIntoDataFrames()
+            )
+            output | 'Print Info' >> beam.Map(print_dataframe_info)
+        print('Synthetic demo complete.')
 
 
 if __name__ == '__main__':

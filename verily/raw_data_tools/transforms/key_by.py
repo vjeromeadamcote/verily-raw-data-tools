@@ -11,11 +11,11 @@ import frozendict
 import pandas as pd
 import pytz
 
-from verily.ds_sdk.contrib.rialto_timezone_fix import UtcOffsetMap
-from verily.ds_sdk.core import schemas
-from verily.ds_sdk.core.io.data_source_cache import DataSourceCache
-from verily.ds_sdk.core.utils import timestamps
-from verily.ds_sdk.core.utils import timezone_utils
+from verily.raw_data_tools.utils.rialto_timezone_fix import UtcOffsetMap
+from verily.raw_data_tools.schemas import schemas
+from verily.raw_data_tools.utils.data_source_cache import DataSourceCache
+from verily.raw_data_tools.utils import timestamps
+from verily.raw_data_tools.utils import timezone_utils
 
 
 def set_frozendict(frozen_dict, key, value):
@@ -232,19 +232,19 @@ class KeyAnnotationsByParticipantDeviceTimeRangeInLocalTimezone(
             annotation start time
         by_end_timestamp (bool): Boolean indicating whether to window based on
             annotation end time
-        utc_offset_map (verily.ds_sdk.contrib.rialto_timezone_fix.UtcOffsetMap):
+        utc_offset_map (verily.raw_data_tools.utils.rialto_timezone_fix.UtcOffsetMap):
             [Optional] mapping of device ids (str) to utc offset in seconds
             (float). This should be generated using
-           verily.ds_sdk.contrib.rialto_timezone_fix.BuildMostCommonUtcOffsetMap
+           verily.raw_data_tools.utils.rialto_timezone_fix.BuildMostCommonUtcOffsetMap
 
     NOTE: One and only one of by_start_timestamp or by_end_timestamp must be
         True otherwise and exception is raised.
 
     Input PCollection:
-        verily.ds_sdk.core.schemas.annotation_schema.Annotation
+        verily.raw_data_tools.schemas.schemas.annotation_schema.Annotation
 
     Output PCollection:
-        Tuple[verily.ds_sdk.core.transforms.atomic.key_by.Key, Annotation]
+        Tuple[verily.raw_data_tools.transforms.key_by.Key, Annotation]
         ->  Key.additional_keys.keys() = [
                 'start_time_range_micros',
                 'end_time_range_micros'
@@ -471,10 +471,10 @@ class KeyDataPointsByParticipantDeviceTimeRange(beam.PTransform):
         to use when keying the Data Points
 
     Input PCollection:
-        verily.ds_sdk.core.schemas.shared_schemas.DataPointType
+        verily.raw_data_tools.schemas.schemas.shared_schemas.DataPointType
 
     Output PCollection:
-        Tuple[verily.ds_sdk.core.transforms.atomic.key_by.Key, DataPointType]
+        Tuple[verily.raw_data_tools.transforms.key_by.Key, DataPointType]
         ->  Key.additional_keys.keys() = [
                 'start_time_range_micros',
                 'end_time_range_micros'
@@ -509,24 +509,24 @@ class KeyDataPointsByParticipantDeviceTimeRangeInLocalTimezone(
         beam_window_fn (beam.transforms.window.WindowFn): Base window function
             to use when keying the Data Points
         data_source_cache
-            (verily.ds_sdk.core.io.data_source_cache.DataSourceCache):
+            (verily.raw_data_tools.utils.data_source_cache.DataSourceCache):
             [Optional] mapping of data source ids (int) to DataSource objects
             which contain the time zone info for a given source. This should be
             obtained using
-            verily.ds_sdk.core.sensors_io.SensorsIO.get_data_source_dict()
-        utc_offset_map (verily.ds_sdk.contrib.rialto_timezone_fix.UtcOffsetMap):
+            the data source dictionary for the pipeline
+        utc_offset_map (verily.raw_data_tools.utils.rialto_timezone_fix.UtcOffsetMap):
             [Optional] mapping of device ids (str) to utc offset in seconds
             (float). This should be generated using
-           verily.ds_sdk.contrib.rialto_timezone_fix.BuildMostCommonUtcOffsetMap
+           verily.raw_data_tools.utils.rialto_timezone_fix.BuildMostCommonUtcOffsetMap
 
     NOTE: One and only one of data_source_cache or utc_offset_map must be
         provided. Providing neither or both with raise and exception.
 
     Input PCollection:
-        verily.ds_sdk.core.schemas.shared_schemas.DataPointType
+        verily.raw_data_tools.schemas.schemas.shared_schemas.DataPointType
 
     Output PCollection:
-        Tuple[verily.ds_sdk.core.transforms.atomic.key_by.Key, DataPointType]
+        Tuple[verily.raw_data_tools.transforms.key_by.Key, DataPointType]
         ->  Key.additional_keys.keys() = [
                 'start_time_range_micros',
                 'end_time_range_micros'
@@ -561,10 +561,10 @@ class KeyDataPointsByParticipantDeviceTimeRangeInTimezone(
             timestamps to
 
     Input PCollection:
-        verily.ds_sdk.core.schemas.shared_schemas.DataPointType
+        verily.raw_data_tools.schemas.schemas.shared_schemas.DataPointType
 
     Output PCollection:
-        Tuple[verily.ds_sdk.core.transforms.atomic.key_by.Key, DataPointType]
+        Tuple[verily.raw_data_tools.transforms.key_by.Key, DataPointType]
         ->  Key.additional_keys.keys() = [
                 'start_time_range_micros',
                 'end_time_range_micros'
@@ -618,3 +618,31 @@ class KeyDataPointsByParticipantTimeRange(beam.PTransform):
                 'Attach Time Range To Key' >> beam.FlatMap(
                     _attach_time_range_data_points,
                     beam_window_fn=self._beam_window_fn))
+
+
+class KeyBy(beam.PTransform):
+    """Simplified facade for keying DataPoints by a named field.
+
+    Wraps KeyDataPointsBy with a simpler constructor matching the public API.
+
+    Args:
+        key_field: One of 'DeviceID', 'ParticipantID', or 'Both'.
+    """
+
+    _VALID_KEY_FIELDS = {'DeviceID', 'ParticipantID', 'Both'}
+
+    def __init__(self, key_field: str = 'DeviceID'):
+        super().__init__()
+        if key_field not in self._VALID_KEY_FIELDS:
+            raise ValueError(
+                f'key_field must be one of {self._VALID_KEY_FIELDS}, '
+                f'got {key_field!r}')
+        self._key_field = key_field
+
+    def expand(self, pcoll):
+        if self._key_field == 'DeviceID':
+            return pcoll | KeyDataPointsBy(by_device=True, by_participant=False)
+        elif self._key_field == 'ParticipantID':
+            return pcoll | KeyDataPointsBy(by_device=False, by_participant=True)
+        else:
+            return pcoll | KeyDataPointsBy(by_device=True, by_participant=True)

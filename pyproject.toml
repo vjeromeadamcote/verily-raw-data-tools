@@ -33,13 +33,11 @@ dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.24.0",
     "numba>=0.58.0",
-    "scipy>=1.10.0",
+    "pytz>=2022.0",
 
     # Utilities
-    "attrs>=21.0.0",
     "frozendict>=2.0.0",
     "immutabledict>=2.0.0",
-    "tabulate>=0.8.0",
 
     # Protobuf (for DataPoint schemas)
     "protobuf>=3.20.0,<5.0.0",
@@ -67,14 +65,13 @@ dev = [
     "toml",
     "types-protobuf",
     "types-pytz",
-    "types-redis",
     "types-toml",
     "wheel",
     "yapf",
 ]
 
 [tool.poetry]
-include = [ "core/testing/test_data/canonical_1h_imu.csv", "core/testing/test_data/imu_1h_sensor2_30hz.csv", "core/testing/test_data/imu_1h_sensor1_50hz.csv", "core/testing/test_data/imu.json", "core/testing/test_data/ppg.json", "verily/ds_sdk/py.typed"]
+include = [ "core/testing/test_data/canonical_1h_imu.csv", "core/testing/test_data/imu_1h_sensor2_30hz.csv", "core/testing/test_data/imu_1h_sensor1_50hz.csv", "core/testing/test_data/imu.json", "core/testing/test_data/ppg.json"]
 
 [tool.mypy]
 ignore_missing_imports = true
@@ -83,7 +80,7 @@ exclude = [ "^.*_test\\.py$",]
 [tool.isort]
 profile = "google"
 line_length = 80
-skip = [ "verily/ds_sdk/core/schemas/__init__.py",]
+skip = []
 
 [tool.yapf]
 based_on_style = "google"

@@ -6,11 +6,11 @@ from typing import Any, Dict, Optional, Union
 import apache_beam as beam
 import pandas as pd
 
-from verily.ds_sdk.core import schemas
-from verily.ds_sdk.core.transforms import CoGroupIntoDataFrames
-from verily.ds_sdk.core.transforms import GroupIntoDataFrames
-from verily.ds_sdk.core.transforms import key_by
-from verily.ds_sdk.core.utils import timestamps
+from verily.raw_data_tools.schemas import schemas
+from verily.raw_data_tools.transforms.group_into_data_frames import CoGroupIntoDataFrames
+from verily.raw_data_tools.transforms.group_into_data_frames import GroupIntoDataFrames
+from verily.raw_data_tools.transforms import key_by
+from verily.raw_data_tools.utils import timestamps
 
 
 def _key_helper(pcoll,
@@ -323,3 +323,37 @@ class BuildAnnotationDataFrames(object):
                                key_fn,
                                self._combine_method,
                                for_annotations=True)
+
+
+class BuildDataFrames(beam.PTransform):
+    """Simplified facade for building DataFrames from DataPoints.
+
+    Wraps BuildDataPointDataFrames with a simpler constructor matching
+    the public API.
+
+    Args:
+        window_seconds: If provided, groups data into fixed time windows of
+            this many seconds. If None, groups all data per participant/device.
+        combine_method: How to combine data from multiple sources. Passed
+            through to the underlying transform.
+        include_metadata: Reserved for future use. Currently ignored.
+        sort_by_time: Reserved for future use. Currently ignored.
+    """
+
+    def __init__(self,
+                 window_seconds: Optional[int] = None,
+                 combine_method: Optional[str] = None,
+                 include_metadata: bool = True,
+                 sort_by_time: bool = True):
+        super().__init__()
+        self._window_seconds = window_seconds
+        self._combine_method = combine_method
+
+    def expand(self, pcoll):
+        if self._window_seconds is not None:
+            return pcoll | BuildDataPointDataFrames.PerParticipantDeviceWindow(
+                beam_window_fn=beam.transforms.window.FixedWindows(
+                    self._window_seconds),
+                combine_method=self._combine_method)
+        return pcoll | BuildDataPointDataFrames.PerParticipantDevice(
+            combine_method=self._combine_method)

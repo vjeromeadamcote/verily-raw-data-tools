@@ -1,6 +1,4 @@
-"""Module for unpacking sensor data from DS SDK.
-go/dssdk_sensor_data_unpacking
-"""
+"""Module for unpacking sensor data."""
 from dataclasses import dataclass
 import logging
 import time
@@ -12,9 +10,12 @@ from apache_beam.utils.timestamp import Timestamp
 import numpy as np
 import pandas as pd
 
-from verily import ds_sdk
-from verily.ds_sdk.contrib import data_unpacking_legacy
-from verily.ds_sdk.contrib import data_unpacking_numba
+from verily.raw_data_tools.schemas.schemas.shared_schemas import DataPoint, DataPointType
+from verily.raw_data_tools.schemas.schemas.schema_utils import data_point_metadata_for_derived_data_from_df
+from verily.raw_data_tools.transforms.build_data_frames import BuildDataPointDataFrames
+from verily.raw_data_tools.utils.data_source_cache import DataSourceCache
+from verily.raw_data_tools.unpacking import data_unpacking_legacy
+from verily.raw_data_tools.unpacking import data_unpacking_numba
 
 # threshold for error from nominal sampling rate
 _NOMINAL_FS_ERROR_THRESHOLD = 0.20
@@ -418,7 +419,7 @@ def unpack_data_frame(sensor_df: pd.DataFrame,
     return unpacked_df
 
 
-def _filter_to_sensor_id(data_point: ds_sdk.schemas.DataPoint, sensor_id: str,
+def _filter_to_sensor_id(data_point: DataPoint, sensor_id: str,
                          data_source_cache):
     data_source = data_source_cache[
         data_point.data_point_metadata.data_source_id]
@@ -435,7 +436,7 @@ def _filter_to_sensor_id(data_point: ds_sdk.schemas.DataPoint, sensor_id: str,
 class PartitionCoppaDevice(beam.PartitionFn):
 
     def partition_for(  # type: ignore[override]
-            self, element: ds_sdk.schemas.DataPoint, num_partitions: int):
+            self, element: DataPoint, num_partitions: int):
         del num_partitions
         return (0 if element.data_point_metadata.device_id.startswith('C2Q')
                 else 1)
@@ -451,7 +452,7 @@ class _UnpackTransform(beam.PTransform):
             cols_to_unpack: List[str],
             to_unpacked_fn: Callable,
             sensor_id: Optional[str] = None,
-            data_source_cache: Optional[ds_sdk.DataSourceCache] = None,
+            data_source_cache: Optional[DataSourceCache] = None,
             time_window_seconds: int = 60 * 60,
             ignore_median_fs_error: bool = False,
             fall_back_to_legacy: bool = False,
@@ -476,12 +477,11 @@ class _UnpackTransform(beam.PTransform):
         self._cam2_use_legacy = cam2_use_legacy
 
     def expand_coppa(
-        self, input_or_inputs: beam.PCollection[ds_sdk.schemas.DataPointType]
-    ) -> beam.PCollection[ds_sdk.schemas.DataPointType]:
+        self, input_or_inputs: beam.PCollection[DataPointType]
+    ) -> beam.PCollection[DataPointType]:
 
         return (input_or_inputs |
-                ('Group Coppa by participant, device, hour' >> ds_sdk.
-                 transforms.BuildDataPointDataFrames.PerParticipantDeviceWindow(
+                ('Group Coppa by participant, device, hour' >> BuildDataPointDataFrames.PerParticipantDeviceWindow(
                      beam_window_fn=beam.transforms.window.FixedWindows(
                          self._time_window_seconds),
                      combine_method=None)) | 'Unpack Coppa device DataFrames' >>
@@ -494,8 +494,8 @@ class _UnpackTransform(beam.PTransform):
                     self._to_unpacked_fn))
 
     def expand(
-        self, input_or_inputs: beam.PCollection[ds_sdk.schemas.DataPointType]
-    ) -> beam.PCollection[ds_sdk.schemas.DataPointType]:
+        self, input_or_inputs: beam.PCollection[DataPointType]
+    ) -> beam.PCollection[DataPointType]:
 
         if self._sensor_id is not None:
             input_or_inputs = (input_or_inputs |
@@ -505,8 +505,8 @@ class _UnpackTransform(beam.PTransform):
                                    self._data_source_cache,
                                ))
 
-        other_device_pcol: beam.PCollection[ds_sdk.schemas.DataPointType]
-        coppa_device_pcol: beam.PCollection[ds_sdk.schemas.DataPointType]
+        other_device_pcol: beam.PCollection[DataPointType]
+        coppa_device_pcol: beam.PCollection[DataPointType]
         if self._cam2_use_legacy:
             coppa_device_pcol, other_device_pcol = (
                 input_or_inputs | 'Partition for is (not) Coppa device' >>
@@ -515,8 +515,8 @@ class _UnpackTransform(beam.PTransform):
             other_device_pcol = input_or_inputs
 
         unpacked_other = (
-            other_device_pcol | 'Group by participant, device, hour' >> ds_sdk.
-            transforms.BuildDataPointDataFrames.PerParticipantDeviceWindow(
+            other_device_pcol | 'Group by participant, device, hour' >>
+            BuildDataPointDataFrames.PerParticipantDeviceWindow(
                 beam_window_fn=beam.transforms.window.FixedWindows(
                     self._time_window_seconds),
                 combine_method=None) |
@@ -538,7 +538,7 @@ class _UnpackTransform(beam.PTransform):
 
 
 @dataclass
-class UnpackedImu(ds_sdk.schemas.DataPoint):
+class UnpackedImu(DataPoint):
     acceleration_x: float
     acceleration_y: float
     acceleration_z: float
@@ -548,30 +548,30 @@ class UnpackedImu(ds_sdk.schemas.DataPoint):
 
 
 @dataclass
-class UnpackedPpg(ds_sdk.schemas.DataPoint):
+class UnpackedPpg(DataPoint):
     green: float
 
 
 @dataclass
-class UnpackedTwoChannelPpg(ds_sdk.schemas.DataPoint):
+class UnpackedTwoChannelPpg(DataPoint):
     green: float
     green_2: float
 
 
 @dataclass
-class UnpackedEda(ds_sdk.schemas.DataPoint):
+class UnpackedEda(DataPoint):
     raw_adc: float
 
 
 @dataclass
-class UnpackedPicardEda(ds_sdk.schemas.DataPoint):
+class UnpackedPicardEda(DataPoint):
     real_adc: float
     im_adc: float
     z2_adc: float
 
 
 @dataclass
-class UnpackedEcg(ds_sdk.schemas.DataPoint):
+class UnpackedEcg(DataPoint):
     raw_adc: int
 
 
@@ -592,7 +592,7 @@ def _to_unpacked_imu(df: pd.DataFrame) -> Iterable[UnpackedImu]:
         unpacked_imu.append(
             UnpackedImu(
                 data_point_metadata=(
-                    ds_sdk.schemas.data_point_metadata_for_derived_data_from_df(
+                    data_point_metadata_for_derived_data_from_df(
                         df)),
                 measurement_timestamp_utc=Timestamp.of(row['timestamp_ms'] /
                                                        1000),
@@ -613,7 +613,7 @@ def _to_unpacked_ppg(df: pd.DataFrame) -> Iterable[UnpackedPpg]:
         unpacked_ppg.append(
             UnpackedPpg(
                 data_point_metadata=(
-                    ds_sdk.schemas.data_point_metadata_for_derived_data_from_df(
+                    data_point_metadata_for_derived_data_from_df(
                         df)),
                 measurement_timestamp_utc=Timestamp.of(row['timestamp_ms'] /
                                                        1000),
@@ -630,7 +630,7 @@ def _to_unpacked_two_channel_ppg(df: pd.DataFrame) -> Iterable[
         unpacked_two_channel_ppg.append(
             UnpackedTwoChannelPpg(
                 data_point_metadata=(
-                    ds_sdk.schemas.data_point_metadata_for_derived_data_from_df(
+                    data_point_metadata_for_derived_data_from_df(
                         df)),
                 measurement_timestamp_utc=Timestamp.of(row['timestamp_ms'] /
                                                        1000),
@@ -647,7 +647,7 @@ def _to_unpacked_eda(df: pd.DataFrame) -> Iterable[UnpackedEda]:
         unpacked_eda.append(
             UnpackedEda(
                 data_point_metadata=(
-                    ds_sdk.schemas.data_point_metadata_for_derived_data_from_df(
+                    data_point_metadata_for_derived_data_from_df(
                         df)),
                 measurement_timestamp_utc=Timestamp.of(row['timestamp_ms'] /
                                                        1000),
@@ -663,7 +663,7 @@ def _to_unpacked_picard_eda(df: pd.DataFrame) -> Iterable[UnpackedPicardEda]:
         unpacked_picard_eda.append(
             UnpackedPicardEda(
                 data_point_metadata=(
-                    ds_sdk.schemas.data_point_metadata_for_derived_data_from_df(
+                    data_point_metadata_for_derived_data_from_df(
                         df)),
                 measurement_timestamp_utc=Timestamp.of(row['timestamp_ms'] /
                                                        1000),
@@ -681,7 +681,7 @@ def _to_unpacked_ecg(df: pd.DataFrame) -> Iterable[UnpackedEcg]:
         unpacked_ecg.append(
             UnpackedEcg(  # pytype: disable=wrong-keyword-args # pylint: disable=unexpected-keyword-arg,line-too-long
                 data_point_metadata=(
-                    ds_sdk.schemas.data_point_metadata_for_derived_data_from_df(
+                    data_point_metadata_for_derived_data_from_df(
                         df)),
                 measurement_timestamp_utc=(Timestamp.of(row['timestamp_ms'] /
                                                         1000)),
@@ -698,7 +698,7 @@ class UnpackImu(_UnpackTransform):
     """
 
     def __init__(self, sensor_id: str,
-                 data_source_cache: ds_sdk.DataSourceCache, **kwargs) -> None:
+                 data_source_cache: DataSourceCache, **kwargs) -> None:
 
         cols_to_unpack = [
             'acceleration_x',
@@ -746,7 +746,7 @@ class UnpackEda(_UnpackTransform):
     """Unpacks EDA data returning one data point per unpacked data."""
 
     def __init__(self, sensor_id: str = None,
-                 data_source_cache: ds_sdk.DataSourceCache = None,
+                 data_source_cache: DataSourceCache = None,
                  **kwargs) -> None:
         kwargs['cam2_use_legacy'] = True
         super().__init__(cols_to_unpack=['raw_adc'],

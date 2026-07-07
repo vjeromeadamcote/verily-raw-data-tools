@@ -106,11 +106,9 @@ All examples are complete and runnable:
 
 ## What's Next
 
-1. **Fix Import Paths**: Update copied modules to use new import paths
-2. **Test**: Run tests to ensure everything works
-3. **Build**: Create distribution package
-4. **Deploy**: Publish to PyPI or internal repository
-5. **Document Workbench Integration**: Add Workbench-specific setup guide
+1. **Build**: Create distribution package with `pip install .`
+2. **Deploy**: Publish to PyPI or internal repository
+3. **Document Workbench Integration**: Add Workbench-specific setup guide
 
 ## Migration Impact
 

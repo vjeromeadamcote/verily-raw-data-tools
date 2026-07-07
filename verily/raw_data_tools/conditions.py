@@ -11,14 +11,12 @@ import re
 from typing import Any, Iterable, List, Optional
 
 from apache_beam.io.gcp.pubsub import PubsubMessage
-import ibis
-from ibis.expr import types as ibis_types  # type: ignore
 import pandas as pd
 
-from verily.ds_sdk.core import schemas
-from verily.ds_sdk.core.io.data_source_cache import DataSourceCache
-from verily.ds_sdk.core.utils import timestamps
-from verily.ds_sdk.protos import enums_pb2
+from verily.raw_data_tools.schemas import schemas
+from verily.raw_data_tools.utils.data_source_cache import DataSourceCache
+from verily.raw_data_tools.utils import timestamps
+from verily.raw_data_tools.protos import enums_pb2
 
 
 def _to_ordered_set(items: Iterable[Any]):
@@ -62,9 +60,9 @@ class Condition(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         """SQL WHERE clause applying the condition on a data points table.
 
         Args:
@@ -77,9 +75,9 @@ class Condition(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         """SQL WHERE clause applying the condition on an annotations table."""
         pass
 
@@ -129,9 +127,9 @@ class AndCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         data_point_conditions = []
         for cond in self.conditions:
             where_clause = cond.data_points_condition(
@@ -144,9 +142,9 @@ class AndCondition(Condition):
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         annotation_conditions = []
         for cond in self.conditions:
             if cond.applies_to_annotations:
@@ -195,9 +193,9 @@ class OrCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         data_point_conditions = []
         for cond in self.conditions:
             where_clause = cond.data_points_condition(
@@ -211,9 +209,9 @@ class OrCondition(Condition):
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         annotation_conditions = []
         for cond in self.conditions:
             if cond.applies_to_annotations:
@@ -256,9 +254,9 @@ class NegateCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         to_negate = self.to_negate.data_points_condition(
             table, include_annotation_conditions)
         if to_negate is not None:
@@ -267,9 +265,9 @@ class NegateCondition(Condition):
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         to_negate = self.to_negate.annotations_condition(
             table, include_annotation_conditions)
         if to_negate is not None:
@@ -305,21 +303,21 @@ class DevicesCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         return table.DeviceID.isin(self._device_ids)
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         return self._device_cond(table)
 
     def _device_cond(
             self,
-            table: ibis_types.TableExpr) -> Optional[ibis_types.BooleanColumn]:
+            table: Any) -> Optional[Any]:
         """Adds an or condition for each device.
 
         We do this as opposed to 'IS IN' so the sql query is deterministic,
@@ -355,18 +353,18 @@ class SensorsCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         # Echo internal tables do not contain the entire data source so we need
         # to filter after querying from BigQuery.
         return None
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         # Not relevant to annotations.
         return None
 
@@ -405,9 +403,9 @@ class UsersCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         try:
             return table.UserID.isin(self._user_ids)
         except AttributeError as e:
@@ -419,14 +417,14 @@ class UsersCondition(Condition):
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         return self._user_cond(table)
 
     def _user_cond(
             self,
-            table: ibis_types.TableExpr) -> Optional[ibis_types.BooleanColumn]:
+            table: Any) -> Optional[Any]:
         """Adds an or condition for each user.
 
         We do this as opposed to 'IS IN' so the sql query is deterministic,
@@ -466,16 +464,16 @@ class AnnotationCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         return None
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         if include_annotation_conditions:
             return table.annotation_label == self.annotation_label
         return None
@@ -525,9 +523,10 @@ class TimeRangeCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
+        import ibis  # lazy import — ibis only needed for ibis-based queries
         timestamp_col = table.DataPointTime
 
         return (timestamp_col >= ibis.timestamp(  # type: ignore
@@ -537,9 +536,10 @@ class TimeRangeCondition(Condition):
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
+        import ibis  # lazy import — ibis only needed for ibis-based queries
         return (table.end_timestamp_utc > ibis.timestamp(  # type: ignore
             self._time_range.start_time.isoformat())) & (
                 table.start_timestamp_utc <= ibis.timestamp(  # type: ignore
@@ -587,9 +587,10 @@ class WriteTimeRangeCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
+        import ibis  # lazy import — ibis only needed for ibis-based queries
         timestamp_col = table.DataPointWriteTime
 
         return (timestamp_col >= ibis.timestamp(  # type: ignore
@@ -599,9 +600,9 @@ class WriteTimeRangeCondition(Condition):
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         raise ValueError('Write time conditions not supported for annotations.')
 
     def data_point_row_condition(self, row: schemas.DataPointType,
@@ -632,18 +633,18 @@ class AlgorithmCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         # Since internal Echo tables do not contain the entire data souce we
         # cannot apply this condition when we read directly from BigQuery.
         return None
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         # Not relevant to annotations. Use AnnotationAlgorithmCondition instead.
         return None
 
@@ -694,17 +695,17 @@ class AnnotationAlgorithmCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         # Not Applicable
         return None
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         is_null = (table.version_name.isnull() & table.version_number.isnull())
         conds = []
         if self._annotation_algo_name:
@@ -762,21 +763,21 @@ class DeviceTypeCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         return table.DeviceID.re_search(self._device_id_pattern)
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         return self._device_type_cond(table)
 
     def _device_type_cond(
             self,
-            table: ibis_types.TableExpr) -> Optional[ibis_types.BooleanColumn]:
+            table: Any) -> Optional[Any]:
         """Adds an or condition for each device.
 
         We do this as opposed to 'IS IN' so the sql query is deterministic,
@@ -829,9 +830,9 @@ class UserNamespaceCondition(Condition):
 
     def data_points_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True,
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         col = table.UserNamespace
         if self._negate:
             return col != self._user_namespace
@@ -840,9 +841,9 @@ class UserNamespaceCondition(Condition):
 
     def annotations_condition(
         self,
-        table: ibis_types.TableExpr,
+        table: Any,
         include_annotation_conditions: bool = True
-    ) -> Optional[ibis_types.BooleanColumn]:
+    ) -> Optional[Any]:
         if self._negate:
             return table.user_namespace != self._user_namespace
         else:

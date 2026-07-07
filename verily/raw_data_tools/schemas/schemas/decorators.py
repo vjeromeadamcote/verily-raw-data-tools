@@ -3,10 +3,10 @@
 import importlib
 from typing import Type
 
-from verily.ds_sdk.core.schemas import schema_utils
-from verily.ds_sdk.core.schemas import shared_schemas
+from verily.raw_data_tools.schemas.schemas import schema_utils
+from verily.raw_data_tools.schemas.schemas import shared_schemas
 
-_GEN_SCHEMA_MODULE = 'verily.ds_sdk.core.schemas.gen'
+_GEN_SCHEMA_MODULE = 'verily.raw_data_tools.schemas.schemas.gen'
 
 
 def dataspec(data_spec_name: str):

@@ -7,8 +7,8 @@ from typing import List, Optional
 
 from apache_beam.utils.timestamp import Timestamp
 
-from verily.ds_sdk.core.schemas import DataPoint
-from verily.ds_sdk.core.schemas import dataspec
+from verily.raw_data_tools.schemas.schemas.shared_schemas import DataPoint
+from verily.raw_data_tools.schemas.schemas.decorators import dataspec
 
 
 @dataspec('com.verily.studywatch.vme_schedule_change_event')

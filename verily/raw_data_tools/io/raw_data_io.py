@@ -5,6 +5,7 @@ sensor data from BigQuery without requiring internal Verily infrastructure.
 """
 
 import logging
+import re
 from typing import List, Optional, Union
 import uuid
 
@@ -18,6 +19,16 @@ from verily.raw_data_tools.pipeline import options as pipeline_options
 from verily.raw_data_tools.pipeline import runner_utils
 
 logging.getLogger().setLevel(logging.INFO)
+
+_IDENTIFIER_RE = re.compile(r'^[A-Za-z0-9._-]{1,64}$')
+
+
+def _validate_identifier(value: str, name: str) -> None:
+    """Validate that a value is a safe SQL identifier."""
+    if not _IDENTIFIER_RE.match(value):
+        raise ValueError(
+            f'{name} contains invalid characters or is too long: {value!r}. '
+            f'Must match {_IDENTIFIER_RE.pattern}')
 
 
 class RawDataIO:
@@ -62,6 +73,9 @@ class RawDataIO:
             dataflow_options: Configuration for Dataflow runner (required if runner='DataflowRunner')
             bigquery_location: BigQuery dataset location (default: 'US')
         """
+        _validate_identifier(project, 'project')
+        _validate_identifier(dataset, 'dataset')
+
         self.project = project
         self.dataset = dataset
         self.bigquery_location = bigquery_location
@@ -86,7 +100,14 @@ class RawDataIO:
             if 'project' not in self._pipeline_options:
                 self._pipeline_options['project'] = project
 
-        self._bq_client = bigquery.Client(project=project, location=bigquery_location)
+        self._bq_client = None
+
+    @property
+    def bq_client(self) -> bigquery.Client:
+        if self._bq_client is None:
+            self._bq_client = bigquery.Client(
+                project=self.project, location=self.bigquery_location)
+        return self._bq_client
 
     def create_pipeline(self, name: Optional[str] = None) -> beam.Pipeline:
         """Create an Apache Beam pipeline.
@@ -114,6 +135,10 @@ class RawDataIO:
     ) -> beam.PTransform:
         """Create a Beam transform to read DataPoints from BigQuery.
 
+        All string inputs are validated against an allowlist pattern to prevent
+        SQL injection. ReadFromBigQuery does not support parameterized queries,
+        so allowlist validation is the mechanism used.
+
         Args:
             table: BigQuery table name (default: 'datapoint')
             device_ids: List of device IDs to filter on
@@ -125,15 +150,24 @@ class RawDataIO:
         Returns:
             Apache Beam PTransform that outputs DataPoint records
 
-        Example:
-            >>> pipeline = io.create_pipeline()
-            >>> data = pipeline | io.read_datapoints(
-            ...     device_ids=['device1'],
-            ...     start_time='2024-01-01',
-            ...     end_time='2024-01-31',
-            ...     data_types=['IMU']
-            ... )
+        Raises:
+            ValueError: If any input fails allowlist validation.
         """
+        _validate_identifier(table, 'table')
+
+        if device_ids:
+            for did in device_ids:
+                _validate_identifier(did, 'device_id')
+
+        if data_types:
+            for dt in data_types:
+                _validate_identifier(dt, 'data_type')
+
+        if limit is not None:
+            if not isinstance(limit, int) or limit <= 0:
+                raise ValueError(
+                    f'limit must be a positive integer, got {limit!r}')
+
         # Build query conditions
         query_conditions = []
 
@@ -168,7 +202,7 @@ class RawDataIO:
             {limit_clause}
         """
 
-        logging.info(f"Reading from BigQuery with query:\n{query}")
+        logging.info("Reading from BigQuery with query:\n%s", query)
 
         return beam.io.ReadFromBigQuery(
             query=query,
@@ -176,17 +210,17 @@ class RawDataIO:
             project=self.project,
         )
 
-    def get_table_schema(self, table: str) -> bigquery.Schema:
+    def get_table_schema(self, table: str) -> List[bigquery.SchemaField]:
         """Get the schema for a BigQuery table.
 
         Args:
             table: Table name
 
         Returns:
-            BigQuery table schema
+            List of BigQuery SchemaField objects
         """
         table_ref = f"{self.project}.{self.dataset}.{table}"
-        table_obj = self._bq_client.get_table(table_ref)
+        table_obj = self.bq_client.get_table(table_ref)
         return table_obj.schema
 
     def list_tables(self) -> List[str]:
@@ -196,5 +230,5 @@ class RawDataIO:
             List of table names
         """
         dataset_ref = f"{self.project}.{self.dataset}"
-        tables = self._bq_client.list_tables(dataset_ref)
+        tables = self.bq_client.list_tables(dataset_ref)
         return [table.table_id for table in tables]

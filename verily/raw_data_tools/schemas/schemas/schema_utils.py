@@ -6,7 +6,7 @@ from typing import List, Optional, Set, Type
 from apache_beam.utils.timestamp import Timestamp
 import pandas as pd
 
-from verily.ds_sdk.core.schemas import shared_schemas
+from verily.raw_data_tools.schemas.schemas import shared_schemas
 
 METADATA_FIELD = 'data_point_metadata'
 TIMESTAMP_FIELD = 'measurement_timestamp_utc'
@@ -25,9 +25,8 @@ def validate_required_fields(schema_class: Type[shared_schemas.DataPointType]):
     if METADATA_FIELD not in schema_properties:
         raise ValueError(
             f'A {METADATA_FIELD} field of type '
-            'verily.ds_sdk.core.schemas.shared_schemas.'
-            f'{shared_schemas.DataPointMetadata.__name__} is required to write '
-            f'data to SensorStore or BigQuery for type: {schema_class}')
+            f'{shared_schemas.DataPointMetadata.__qualname__} is required to '
+            f'write data to SensorStore or BigQuery for type: {schema_class}')
 
     if TIMESTAMP_FIELD not in schema_properties:
         raise ValueError(
@@ -40,7 +39,7 @@ def validate_required_fields(schema_class: Type[shared_schemas.DataPointType]):
 def get_schema_fields(
         schema_class: Type[shared_schemas.DataPointType]) -> Set[str]:
     if not dataclasses.is_dataclass(schema_class):
-        raise ValueError('All DS SDK schemas must be a dataclass. '
+        raise ValueError('All schemas must be a dataclass. '
                          f'{schema_class.__name__} was not a dataclass')
     return set(field.name for field in dataclasses.fields(schema_class))
 
@@ -148,5 +147,5 @@ def data_point_metadata_for_derived_data_from_df(
     if data_point_metadata is None:
         raise RuntimeError(
             'No value for `data_point_metadata` in DataFrame.attrs. This method'
-            ' only works for DataFrames built using the ds_sdk API.')
+            ' only works for DataFrames built using the raw_data_tools API.')
     return data_point_metadata

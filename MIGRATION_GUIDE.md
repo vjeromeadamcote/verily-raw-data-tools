@@ -206,6 +206,30 @@ io = RawDataIO(
 | Registry lookups | Direct BQ access | ✅ Simplified |
 | Internal auth | Standard GCP auth | ✅ Simplified |
 
+## v1.0 Limitations
+
+### Timezone-Aware KeyBy Transforms
+The DS SDK's `KeyDataPointsByParticipantDeviceTimeRangeInLocalTimezone`
+transform requires `DataSourceCache` for device-to-timezone mappings.
+In v1.0 the `DataSourceCache` is a stub that raises `NotImplementedError`
+when queried — this transform will fail at runtime. Use the non-timezone-aware
+variants (`KeyDataPointsBy`, `KeyDataPointsByParticipantDeviceTimeRange`)
+or supply a pre-built `UtcOffsetMap` via `BuildMostCommonUtcOffsetMap`.
+
+### Dataflow Label Escaping
+The `regex` library was replaced with stdlib `re`. The Unicode-aware
+pattern `\p{Ll}\p{Lo}\p{N}` is now ASCII `[a-z0-9_-]`. Since Dataflow
+job labels are ASCII-only per the API spec, this is equivalent for all
+valid inputs. Non-ASCII characters in labels were already invalid.
+
+### Unpacking API
+Use the specific PTransform classes (`UnpackImu`, `UnpackPpg`, `UnpackEcg`,
+`UnpackEda`) instead of `DataUnpacker` directly. Example:
+```python
+from verily.raw_data_tools.unpacking import UnpackImu
+unpacked = compressed_data | UnpackImu()
+```
+
 ## Common Migration Issues
 
 ### Issue 1: Missing Registry Parameter
