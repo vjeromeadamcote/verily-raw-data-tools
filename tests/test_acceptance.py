@@ -127,12 +127,16 @@ class AC4_ExamplesExecute(unittest.TestCase):
 
     _EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), '..', 'examples')
 
+    _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
     def _run_example(self, filename):
         filepath = os.path.abspath(
             os.path.join(self._EXAMPLES_DIR, filename))
         env = os.environ.copy()
         env.pop('GOOGLE_PROJECT', None)
         env.pop('GOOGLE_APPLICATION_CREDENTIALS', None)
+        env['PYTHONPATH'] = (
+            self._REPO_ROOT + os.pathsep + env.get('PYTHONPATH', ''))
         result = subprocess.run(
             [sys.executable, filepath],
             capture_output=True, text=True, timeout=120, env=env)

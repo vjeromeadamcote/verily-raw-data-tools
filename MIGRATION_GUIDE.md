@@ -125,10 +125,9 @@ unpacked = compressed_data | beam.ParDo(unpacker)
 
 #### New Code
 ```python
-from verily.raw_data_tools import DataUnpacker
+from verily.raw_data_tools.unpacking import UnpackImu
 
-unpacker = DataUnpacker()
-unpacked = compressed_data | beam.ParDo(unpacker)
+unpacked = compressed_data | UnpackImu()
 ```
 
 ### Example 3: Transforms
@@ -177,9 +176,11 @@ from verily.raw_data_tools import RawDataIO, DataflowOptions
 
 dataflow_opts = DataflowOptions(
     job_name='my-job',
-    temp_location='gs://my-bucket/temp',
-    staging_location='gs://my-bucket/staging',
-    region='us-central1'
+    region='us-central1',
+    additional_options={
+        'temp_location': 'gs://my-bucket/temp',
+        'staging_location': 'gs://my-bucket/staging',
+    }
 )
 
 io = RawDataIO(
@@ -262,16 +263,16 @@ unpacked = compressed_data | UnpackImu()
 - [ ] Update initialization (remove `registry`, `env`, add `project`, `dataset`)
 - [ ] Update `echo_data_point_rows()` to `read_datapoints()`
 - [ ] Simplify conditions (use direct parameters instead of Condition objects)
-- [ ] Update DataflowOptions (use `temp_location`/`staging_location` instead of `temp_bucket`)
+- [ ] Update DataflowOptions (use `additional_options` dict for `temp_location`, `staging_location`, etc.)
 - [ ] Test locally with DirectRunner
 - [ ] Test on Dataflow with small dataset
 - [ ] Deploy to production
 
 ## Getting Help
 
-- **Documentation**: See `README_RAWDATATOOLS.md`
+- **Documentation**: See `README.md`
 - **Examples**: Check `examples/` directory
-- **Issues**: https://github.com/verily-src/sensorsuite-ds-sdk/issues
+- **Issues**: https://github.com/vjeromeadamcote/verily-raw-data-tools/issues
 - **Workbench Support**: workbench-support@verily.com
 
 ## Timeline

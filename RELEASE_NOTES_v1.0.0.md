@@ -120,21 +120,21 @@ pip install verily-raw-data-tools
 
 ### From Source
 ```bash
-git clone https://github.com/verily-src/sensorsuite-ds-sdk.git
-cd sensorsuite-ds-sdk
+git clone https://github.com/vjeromeadamcote/verily-raw-data-tools.git
+cd verily-raw-data-tools
 pip install -e .
 ```
 
 ## 📚 Documentation
 
-- **README**: `README_RAWDATATOOLS.md` - Complete usage guide
+- **README**: `README.md` - Complete usage guide
 - **Migration Guide**: `MIGRATION_GUIDE.md` - Migrate from DS SDK
 - **Externalization Plan**: `EXTERNALIZATION_PLAN.md` - Design decisions
 - **Examples**: `examples/` directory - Working code samples
 
 ## 🔧 Requirements
 
-- Python 3.8+
+- Python 3.11+
 - Apache Beam 2.43.0+
 - Google Cloud BigQuery access
 - For Dataflow: GCS bucket access
@@ -209,9 +209,9 @@ Special thanks to all DS SDK contributors whose work formed the foundation of th
 
 ## 📧 Support
 
-- **Bug Reports**: https://github.com/verily-src/sensorsuite-ds-sdk/issues
+- **Bug Reports**: https://github.com/vjeromeadamcote/verily-raw-data-tools/issues
 - **Workbench Questions**: workbench-support@verily.com
-- **Documentation**: https://github.com/verily-src/sensorsuite-ds-sdk
+- **Documentation**: https://github.com/vjeromeadamcote/verily-raw-data-tools
 
 ## 📄 License
 

@@ -26,8 +26,8 @@ pip install verily-raw-data-tools
 ### Local Development
 
 ```bash
-git clone https://github.com/verily-src/sensorsuite-ds-sdk.git
-cd sensorsuite-ds-sdk
+git clone https://github.com/vjeromeadamcote/verily-raw-data-tools.git
+cd verily-raw-data-tools
 pip install -e .
 ```
 
@@ -63,9 +63,11 @@ result.wait_until_finish()
 
 ### Unpacking Sensor Data
 
+Use the sensor-specific PTransforms to unpack compressed data into time series:
+
 ```python
-from verily.raw_data_tools import RawDataIO, DataUnpacker
-import apache_beam as beam
+from verily.raw_data_tools import RawDataIO
+from verily.raw_data_tools.unpacking import UnpackImu
 
 io = RawDataIO(project='my-project', dataset='sensors', runner='DirectRunner')
 pipeline = io.create_pipeline()
@@ -78,70 +80,49 @@ compressed_data = pipeline | io.read_datapoints(
 )
 
 # Unpack into time series
-unpacker = DataUnpacker()
-unpacked_data = compressed_data | 'Unpack' >> beam.ParDo(unpacker)
-
-# Convert to DataFrames
-from verily.raw_data_tools.transforms import BuildDataFrames
-
-dataframes = unpacked_data | BuildDataFrames()
+unpacked_data = compressed_data | 'Unpack' >> UnpackImu()
 
 pipeline.run().wait_until_finish()
 ```
 
+Available unpackers: `UnpackImu`, `UnpackPpg`, `UnpackEcg`, `UnpackEda`,
+`UnpackTwoChannelPpg`, `UnpackPicardEda`.
+
 ### Segmenting Data with Key-By
 
 ```python
-from verily.raw_data_tools import RawDataIO, KeyBy
-import apache_beam as beam
+from verily.raw_data_tools.transforms import KeyBy, BuildDataFrames
+from verily.raw_data_tools.unpacking import UnpackPpg
 
-io = RawDataIO(project='my-project', dataset='sensors', runner='DirectRunner')
-pipeline = io.create_pipeline()
-
-data = pipeline | io.read_datapoints(data_types=['PPG'])
+# ... (after reading and unpacking data) ...
 
 # Key by device ID
-by_device = data | 'Key by Device' >> KeyBy(key_field='DeviceID')
+by_device = unpacked_data | 'Key by Device' >> KeyBy(key_field='DeviceID')
 
 # Key by participant ID
-by_participant = data | 'Key by Participant' >> KeyBy(key_field='ParticipantID')
+by_participant = unpacked_data | 'Key by Participant' >> KeyBy(key_field='ParticipantID')
 
-# Key by time windows (5-minute windows)
-from apache_beam.transforms.window import FixedWindows
-from apache_beam import WindowInto
-import apache_beam.transforms.window as window
+# Key by both device and participant
+by_both = unpacked_data | 'Key by Both' >> KeyBy(key_field='Both')
 
-windowed_data = data | WindowInto(window.FixedWindows(5 * 60))  # 5 minutes in seconds
-
-pipeline.run().wait_until_finish()
+# Build DataFrames from keyed data
+dataframes = by_device | 'Build DFs' >> BuildDataFrames()
 ```
 
 ### Integrating Custom Algorithms
 
 ```python
-from verily.raw_data_tools import RawDataIO, apply_to_dataframe
-import apache_beam as beam
+from verily.raw_data_tools import apply_to_dataframe
 import pandas as pd
 
 # Define your custom processing function
 def calculate_heart_rate(df: pd.DataFrame) -> pd.DataFrame:
     """Calculate heart rate from PPG signal."""
-    # Your algorithm here
-    df['heart_rate'] = df['ppg_value'].rolling(window=100).apply(
-        lambda x: detect_peaks(x) * 60
-    )
+    df['heart_rate'] = df['ppg_value'].rolling(window=100).mean()
     return df
 
-# Integrate into pipeline
-io = RawDataIO(project='my-project', dataset='sensors', runner='DirectRunner')
-pipeline = io.create_pipeline()
-
-data = pipeline | io.read_datapoints(data_types=['PPG'])
-
-# Apply custom algorithm
-processed = data | apply_to_dataframe(calculate_heart_rate)
-
-pipeline.run().wait_until_finish()
+# Apply to keyed DataFrames in the pipeline
+processed = dataframes | apply_to_dataframe(calculate_heart_rate)
 ```
 
 ### Running on Dataflow
@@ -152,14 +133,13 @@ from verily.raw_data_tools import RawDataIO, DataflowOptions
 # Configure Dataflow
 dataflow_opts = DataflowOptions(
     job_name='sensor-processing-job',
-    temp_location='gs://my-bucket/temp',
-    staging_location='gs://my-bucket/staging',
     region='us-central1',
-    num_workers=10,
-    max_num_workers=50,
-    machine_type='n1-standard-4',
     additional_options={
-        'subnetwork': 'regions/us-central1/subnetworks/my-subnet'
+        'temp_location': 'gs://my-bucket/temp',
+        'staging_location': 'gs://my-bucket/staging',
+        'num_workers': 10,
+        'max_num_workers': 50,
+        'machine_type': 'n1-standard-4',
     }
 )
 
@@ -183,7 +163,6 @@ data = pipeline | io.read_datapoints(
 
 # Launch on Dataflow
 result = pipeline.run()
-print(f"Dataflow job started. Monitor at: {result.metrics()}")
 ```
 
 ## Core Capabilities
@@ -194,7 +173,7 @@ The `RawDataIO` class provides the main interface for reading sensor data from B
 
 **Key Features:**
 - Query by device ID, participant ID, time range, and data type
-- Automatic query construction
+- Automatic query construction with SQL injection prevention
 - Support for both DirectRunner (local) and DataflowRunner (cloud)
 - Built-in BigQuery authentication via Workbench
 
@@ -214,24 +193,20 @@ data = pipeline | io.read_datapoints(
 
 ### 2. Data Unpacking
 
-The `DataUnpacker` class unpacks compressed sensor data packets into time-series DataFrames.
+Sensor-specific PTransforms unpack compressed data packets into time-series DataPoints.
 
 **Key Features:**
 - Handles variable sampling rates
 - Automatic timestamp reconstruction
-- Support for IMU, PPG, ECG, and other sensor types
+- Support for IMU, PPG, ECG, EDA, and other sensor types
 - Numba-accelerated for performance
 
 **Example:**
 ```python
-from verily.raw_data_tools.unpacking import DataUnpacker
+from verily.raw_data_tools.unpacking import UnpackImu, UnpackPpg
 
-unpacker = DataUnpacker(
-    error_thresh=0.05,  # Sampling rate error threshold
-    ignore_median_fs_error=False
-)
-
-unpacked = compressed_data | 'Unpack' >> beam.ParDo(unpacker)
+imu_unpacked = compressed_imu | 'Unpack IMU' >> UnpackImu()
+ppg_unpacked = compressed_ppg | 'Unpack PPG' >> UnpackPpg()
 ```
 
 ### 3. DataFrame Transforms
@@ -239,29 +214,27 @@ unpacked = compressed_data | 'Unpack' >> beam.ParDo(unpacker)
 Transform DataPoints into structured Pandas DataFrames for analysis.
 
 **Available Transforms:**
-- `BuildDataFrames`: Build DataFrames from DataPoints
-- `GroupIntoDataFrames`: Group and aggregate DataPoints into DataFrames
+- `BuildDataFrames`: Build DataFrames from keyed DataPoints
+- `GroupIntoDataFrames`: Lower-level grouping and aggregation
 
 **Example:**
 ```python
 from verily.raw_data_tools.transforms import BuildDataFrames
 
-# Convert to DataFrames
-dfs = data | 'Build DFs' >> BuildDataFrames(
-    include_metadata=True,
-    sort_by_time=True
+# Convert keyed data to DataFrames
+dfs = keyed_data | 'Build DFs' >> BuildDataFrames()
+
+# With time windowing (group into 5-minute windows)
+windowed_dfs = keyed_data | 'Windowed DFs' >> BuildDataFrames(
+    window_seconds=300
 )
 ```
 
 ### 4. Data Segmentation (Key-By)
 
-Segment data by various keys for parallel processing.
+Segment data by device ID, participant ID, or both.
 
-**Key Types:**
-- Device ID
-- Participant ID
-- Session ID
-- Time windows (fixed, sliding, session-based)
+**Valid key fields:** `'DeviceID'`, `'ParticipantID'`, `'Both'`
 
 **Example:**
 ```python
@@ -273,11 +246,11 @@ by_device = data | KeyBy(key_field='DeviceID')
 # Key by participant
 by_participant = data | KeyBy(key_field='ParticipantID')
 
-# Key by custom field
-by_session = data | KeyBy(key_field='SessionID')
+# Key by both device and participant
+by_both = data | KeyBy(key_field='Both')
 ```
 
-**Time-Based Windowing:**
+**Time-Based Windowing** can be applied using standard Beam transforms:
 ```python
 import apache_beam as beam
 from apache_beam.transforms.window import FixedWindows, SlidingWindows
@@ -295,8 +268,6 @@ sliding_windows = data | beam.WindowInto(
 
 Integrate your own Python functions or 3rd-party algorithms into the pipeline.
 
-**Three Ways to Integrate:**
-
 **A. Simple Function Mapping:**
 ```python
 from verily.raw_data_tools.transforms import apply_to_dataframe
@@ -305,7 +276,7 @@ def my_algorithm(df: pd.DataFrame) -> pd.DataFrame:
     df['result'] = df['value'].rolling(100).mean()
     return df
 
-processed = data | apply_to_dataframe(my_algorithm)
+processed = dataframes | apply_to_dataframe(my_algorithm)
 ```
 
 **B. Custom Class Integration:**
@@ -320,7 +291,7 @@ class MyAnalyzer:
         df['anomaly'] = df['value'] > self.threshold
         return df
 
-processed = data | apply_algorithm(
+processed = dataframes | apply_algorithm(
     MyAnalyzer,
     method_name='analyze',
     init_args={'threshold': 95.0}
@@ -331,15 +302,7 @@ processed = data | apply_algorithm(
 ```python
 from verily.raw_data_tools.transforms import MapWithCustomFunction
 
-def process_with_context(element, threshold, window_size):
-    # Your complex processing logic
-    return processed_element
-
-processed = data | MapWithCustomFunction(
-    process_with_context,
-    threshold=90,
-    window_size=1000
-)
+processed = dataframes | MapWithCustomFunction(my_function)
 ```
 
 ### 6. Pipeline Building & Launching
@@ -348,44 +311,21 @@ Build and deploy production pipelines on Google Cloud Dataflow.
 
 **Dataflow Configuration:**
 ```python
-from verily.raw_data_tools.pipeline import DataflowOptions
+from verily.raw_data_tools import DataflowOptions
 
 opts = DataflowOptions(
     job_name='my-sensor-pipeline',
-    temp_location='gs://my-bucket/temp',
-    staging_location='gs://my-bucket/staging',
     region='us-central1',
-    num_workers=20,
-    max_num_workers=100,
-    machine_type='n1-highmem-4',
-    disk_size_gb=100,
-    use_public_ips=False,
     additional_options={
+        'temp_location': 'gs://my-bucket/temp',
+        'staging_location': 'gs://my-bucket/staging',
+        'num_workers': 20,
+        'max_num_workers': 100,
+        'machine_type': 'n1-highmem-4',
+        'disk_size_gb': 100,
+        'use_public_ips': False,
         'experiments': ['use_runner_v2'],
-        'subnetwork': 'regions/us-central1/subnetworks/workbench-subnet'
     }
-)
-```
-
-**Docker Image Building** (for custom dependencies):
-```python
-from verily.raw_data_tools.pipeline.docker import WorkerImage
-
-# Build custom worker image with your dependencies
-image_builder = WorkerImage(
-    project='my-project',
-    requirements_file='requirements.txt',
-    dockerfile='Dockerfile.worker'
-)
-
-image_uri = image_builder.build_and_push(
-    tag='my-pipeline-v1'
-)
-
-# Use in Dataflow options
-opts = DataflowOptions(
-    worker_harness_container_image=image_uri,
-    # ... other options
 )
 ```
 
@@ -398,6 +338,8 @@ See the `examples/` directory for complete working examples:
 - `examples/custom_algorithm.py` - Integrating a custom heart rate algorithm
 - `examples/full_pipeline.py` - End-to-end production pipeline on Dataflow
 
+All examples run a synthetic-data demo when `GOOGLE_PROJECT` is not set.
+
 ## Workbench Integration
 
 ### Authentication
@@ -409,12 +351,15 @@ In Verily Workbench, authentication to BigQuery is handled automatically using y
 Store pipeline artifacts (temp files, staging) in Workbench-managed GCS buckets:
 
 ```python
-# Workbench provides environment variables
 import os
+from verily.raw_data_tools import DataflowOptions
 
 dataflow_opts = DataflowOptions(
-    temp_location=f"gs://{os.environ['WORKSPACE_BUCKET']}/temp",
-    staging_location=f"gs://{os.environ['WORKSPACE_BUCKET']}/staging",
+    job_name='my-pipeline',
+    additional_options={
+        'temp_location': f"gs://{os.environ['WORKSPACE_BUCKET']}/temp",
+        'staging_location': f"gs://{os.environ['WORKSPACE_BUCKET']}/staging",
+    }
 )
 ```
 
@@ -449,19 +394,19 @@ RawDataIO(
 **Methods:**
 - `create_pipeline(name: Optional[str] = None) -> beam.Pipeline`
 - `read_datapoints(...) -> beam.PTransform`
-- `get_table_schema(table: str) -> bigquery.Schema`
+- `get_table_schema(table: str) -> List[bigquery.SchemaField]`
 - `list_tables() -> List[str]`
 
-### DataUnpacker
+### UnpackImu / UnpackPpg / UnpackEcg / UnpackEda
 
-Unpacks compressed sensor data.
+Sensor-specific PTransforms for unpacking compressed data. Use these instead of
+`DataUnpacker` directly.
 
 ```python
-DataUnpacker(
-    error_thresh: float = 0.05,           # Sampling rate error threshold
-    ignore_median_fs_error: bool = False,  # Ignore median FS errors
-    fallback_to_legacy: bool = False       # Use legacy unpacking
-)
+from verily.raw_data_tools.unpacking import UnpackImu, UnpackPpg
+
+unpacked_imu = compressed_data | UnpackImu()
+unpacked_ppg = compressed_data | UnpackPpg()
 ```
 
 ### KeyBy
@@ -470,20 +415,18 @@ Segment data by key fields.
 
 ```python
 KeyBy(
-    key_field: str,           # Field name to key by ('DeviceID', 'ParticipantID', etc.)
-    preserve_metadata: bool = True
+    key_field: str = 'DeviceID'  # One of 'DeviceID', 'ParticipantID', 'Both'
 )
 ```
 
 ### BuildDataFrames
 
-Convert DataPoints to DataFrames.
+Convert keyed DataPoints to DataFrames.
 
 ```python
 BuildDataFrames(
-    include_metadata: bool = True,  # Include DataPoint metadata in DataFrame
-    sort_by_time: bool = True,       # Sort by timestamp
-    deduplicate: bool = False        # Remove duplicate timestamps
+    window_seconds: Optional[int] = None,   # Fixed time window size in seconds
+    combine_method: Optional[str] = None     # How to combine multiple sources
 )
 ```
 
@@ -493,18 +436,34 @@ Configuration for Dataflow pipelines.
 
 ```python
 DataflowOptions(
-    job_name: str,
-    temp_location: str,          # gs:// path
-    staging_location: str,       # gs:// path
-    region: str = 'us-central1',
-    num_workers: int = 1,
-    max_num_workers: int = 10,
-    machine_type: str = 'n1-standard-4',
-    disk_size_gb: int = 50,
-    use_public_ips: bool = True,
-    service_account: Optional[str] = None,
-    additional_options: Optional[Dict] = None
+    job_name: str,                                   # Dataflow job name
+    region: str = 'us-central1',                     # GCP region
+    additional_options: Dict[str, Any] = {}           # All other Dataflow options
 )
+```
+
+Runner-specific options (`temp_location`, `staging_location`, `num_workers`,
+`max_num_workers`, `machine_type`, `disk_size_gb`, etc.) go in
+`additional_options`.
+
+### apply_to_dataframe
+
+```python
+apply_to_dataframe(
+    func: Callable[[pd.DataFrame], pd.DataFrame],
+    label: Optional[str] = None
+) -> MapWithCustomFunction
+```
+
+### apply_algorithm
+
+```python
+apply_algorithm(
+    algorithm_class: type,
+    method_name: str = 'process',
+    init_args: Optional[dict] = None,
+    label: Optional[str] = None
+) -> MapWithCustomFunction
 ```
 
 ## Performance Tips
@@ -521,10 +480,6 @@ data = io.read_datapoints(
     start_time='2024-01-01',
     data_types=['IMU']
 )
-
-# Less efficient - reads everything then filters
-data = io.read_datapoints()  # Reads all data
-filtered = data | beam.Filter(lambda x: x['DeviceID'] in ['dev1', 'dev2'])
 ```
 
 ### 3. Batch Processing
@@ -534,12 +489,6 @@ batched = data | beam.BatchElements(
     min_batch_size=100,
     max_batch_size=1000
 )
-```
-
-### 4. Use Numba Unpacking
-For IMU/PPG data, Numba unpacking is significantly faster:
-```python
-unpacker = DataUnpacker(fallback_to_legacy=False)  # Uses Numba by default
 ```
 
 ## Troubleshooting
@@ -560,8 +509,11 @@ https://console.cloud.google.com/dataflow/jobs
 Increase machine type or reduce batch size:
 ```python
 dataflow_opts = DataflowOptions(
-    machine_type='n1-highmem-8',  # More memory
-    disk_size_gb=200               # More disk
+    job_name='my-pipeline',
+    additional_options={
+        'machine_type': 'n1-highmem-8',  # More memory
+        'disk_size_gb': 200,              # More disk
+    }
 )
 ```
 
@@ -577,4 +529,4 @@ Apache License 2.0
 
 For Workbench-specific questions: workbench-support@verily.com
 
-For SDK issues: https://github.com/verily-src/sensorsuite-ds-sdk/issues
+For SDK issues: https://github.com/vjeromeadamcote/verily-raw-data-tools/issues

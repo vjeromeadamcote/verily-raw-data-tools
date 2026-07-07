@@ -45,10 +45,9 @@ examples/                                   # ✨ NEW: Complete examples
 └── full_pipeline.py                       # Production Dataflow pipeline
 
 Documentation:
-├── README_RAWDATATOOLS.md                 # ✨ NEW: Main documentation
-├── MIGRATION_GUIDE.md                     # ✨ NEW: DS SDK → Raw Data Tools
-├── EXTERNALIZATION_PLAN.md                # ✨ NEW: Design decisions
-└── RELEASE_NOTES_v1.0.0.md               # ✨ NEW: Release notes
+├── README.md                              # Main documentation
+├── MIGRATION_GUIDE.md                     # DS SDK → Raw Data Tools
+└── SUMMARY.md                             # This file
 ```
 
 ## Key Accomplishments
@@ -123,7 +122,7 @@ All examples are complete and runnable:
 - Created `examples/` directory
 - Created documentation files
 
-## Branch Status
+## Repository
 
-- Current branch: `feature/workbench-externalization`
-- Ready for: Code review, testing, PR creation
+- Repository: https://github.com/vjeromeadamcote/verily-raw-data-tools
+- Branch: `main`
